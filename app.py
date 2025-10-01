@@ -1,53 +1,65 @@
 import plotly.express as px
 
-st.divider()
-st.header("📊 Análises Gráficas")
+st.markdown("---")
+st.header("📊 Dashboard de Produção QPL")
 
-# 1. Produção por Operador
-if "Nome Operador" in df.columns and "Kg Produzido" in df.columns:
-    st.subheader("Produção por Operador")
-    fig1 = px.bar(
-        df, 
-        x="Nome Operador", 
-        y="Kg Produzido", 
-        color="Nome Operador",
-        title="Total produzido por operador",
-        text_auto=True
-    )
-    st.plotly_chart(fig1, use_container_width=True)
+# Criar abas
+aba1, aba2, aba3, aba4 = st.tabs(["📌 Resumo", "👷 Operadores", "🏭 Clientes", "⚡ Paradas"])
 
-# 2. Produção por Cliente
-if "Cliente" in df.columns and "Kg Produzido" in df.columns:
-    st.subheader("Produção por Cliente")
-    fig2 = px.pie(
-        df, 
-        names="Cliente", 
-        values="Kg Produzido", 
-        title="Participação por Cliente"
-    )
-    st.plotly_chart(fig2, use_container_width=True)
+# ============================
+# 📌 Resumo
+# ============================
+with aba1:
+    st.subheader("Indicadores Gerais")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Produção Total (Kg)", f"{df.get('Kg Produzido', pd.Series()).sum():,.0f}")
+    with col2:
+        horas = df.get("Horas (dec)", pd.Series()).sum()
+        st.metric("Horas Totais", f"{horas:,.2f}")
+    with col3:
+        prod = df.get("Kg Produzido", pd.Series()).sum()
+        eff = prod / horas if horas and horas > 0 else 0
+        st.metric("Eficiência Média (Kg/h)", f"{eff:,.2f}")
+    with col4:
+        apara = df.get("Kg Apara", pd.Series()).sum()
+        aproveitamento = (prod / (prod + apara) * 100) if (prod + apara) > 0 else 0
+        st.metric("Aproveitamento (%)", f"{aproveitamento:,.2f}")
 
-# 3. Produção ao longo do tempo
-if "Data" in df.columns and "Kg Produzido" in df.columns:
-    st.subheader("Produção ao longo do tempo")
-    fig3 = px.line(
-        df.groupby("Data")["Kg Produzido"].sum().reset_index(),
-        x="Data",
-        y="Kg Produzido",
-        markers=True,
-        title="Kg produzido por dia"
-    )
-    st.plotly_chart(fig3, use_container_width=True)
+    # Produção ao longo do tempo
+    if "Data" in df.columns and "Kg Produzido" in df.columns:
+        st.subheader("📈 Produção ao longo do tempo")
+        df_time = df.groupby("Data")["Kg Produzido"].sum().reset_index()
+        fig = px.line(df_time, x="Data", y="Kg Produzido", markers=True, title="Kg produzido por dia")
+        st.plotly_chart(fig, use_container_width=True)
 
-# 4. Ranking de Paradas
-if "Descrição do Código" in df.columns and "Cód. Parada" in df.columns:
-    st.subheader("Códigos de Parada mais Frequentes")
-    parada_df = df.groupby("Descrição do Código").size().reset_index(name="Frequência")
-    fig4 = px.bar(
-        parada_df.sort_values("Frequência", ascending=False),
-        x="Descrição do Código",
-        y="Frequência",
-        title="Top paradas registradas",
-        text_auto=True
-    )
-    st.plotly_chart(fig4, use_container_width=True)
+# ============================
+# 👷 Operadores
+# ============================
+with aba2:
+    if "Nome Operador" in df.columns and "Kg Produzido" in df.columns:
+        st.subheader("Produção por Operador")
+        fig = px.bar(df, x="Nome Operador", y="Kg Produzido", color="Nome Operador",
+                     title="Total produzido por operador", text_auto=True)
+        st.plotly_chart(fig, use_container_width=True)
+
+# ============================
+# 🏭 Clientes
+# ============================
+with aba3:
+    if "Cliente" in df.columns and "Kg Produzido" in df.columns:
+        st.subheader("Produção por Cliente")
+        fig = px.pie(df, names="Cliente", values="Kg Produzido", title="Participação por Cliente")
+        st.plotly_chart(fig, use_container_width=True)
+
+# ============================
+# ⚡ Paradas
+# ============================
+with aba4:
+    if "Descrição do Código" in df.columns:
+        st.subheader("Códigos de Parada mais Frequentes")
+        parada_df = df.groupby("Descrição do Código").size().reset_index(name="Frequência")
+        parada_df = parada_df.sort_values("Frequência", ascending=False).head(10)
+        fig = px.bar(parada_df, x="Descrição do Código", y="Frequência",
+                     title="Top paradas registradas", text_auto=True)
+        st.plotly_chart(fig, use_container_width=True)
