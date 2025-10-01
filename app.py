@@ -1,47 +1,63 @@
+# app.py (Etapa 01 - Opção A: CSV público)
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import numpy as np
 
-st.set_page_config(page_title="Dashboard Produção QPL", layout="wide")
+st.set_page_config(page_title="QPL Flexo Dashboard", layout="wide")
 
-st.title("📊 Dashboard de Produção - Flexografia QPL")
+SHEET_CSV = "https://docs.google.com/spreadsheets/d/1q1TJlJAdGBwX_l2KKKzuSisYbibJht6GwKAT9D7X9dY/export?format=csv"
 
-uploaded_file = st.file_uploader("Carregar planilha de produção", type=["xlsx", "csv"])
-
-if uploaded_file:
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8")
-    else:
-        df = pd.read_excel(uploaded_file)
-
-    st.subheader("📑 Dados Carregados")
-    st.dataframe(df, use_container_width=True)
-
-    # --- Produção por Operador ---
-    st.subheader("👤 Produção por Operador")
-    fig_op = px.bar(df, x="Nome Operador", y="Kg Produzido", text="Kg Produzido", color="Nome Operador")
-    fig_op.update_traces(texttemplate='%{text:,.0f}', textposition="outside")
-    st.plotly_chart(fig_op, use_container_width=True)
-
-    # --- Produção por Turno ---
-    st.subheader("🌙 Produção por Turno")
-    fig_turno = px.pie(df, names="Turno", values="Kg Produzido")
-    st.plotly_chart(fig_turno, use_container_width=True)
-
-    # --- Códigos de Parada ---
-    st.subheader("🛑 Códigos de Parada")
-    paradas = df.groupby("Cód. Parada").size().reset_index(name="Qtde")
-    fig_paradas = px.bar(paradas, x="Cód. Parada", y="Qtde", text="Qtde", color="Cód. Parada")
-    st.plotly_chart(fig_paradas, use_container_width=True)
-
-    # --- Total de Horas ---
-    st.subheader("⏱️ Total de Horas")
-    if "Total - Horas" in df.columns:
+@st.cache_data(ttl=900)  # cache por 15 min
+def load_data():
+    df = pd.read_csv(SHEET_CSV)
+    # Normalizações de nomes de colunas
+    df.columns = [c.strip().replace("\n", " ").replace("  ", " ") for c in df.columns]
+    # Coerções numéricas (troca vírgula por ponto)
+    num_cols = ["Largura","Kg Produzido","Metragem","Gramatura","Kg Apara"]
+    for c in num_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c].astype(str).str.replace(",", "."), errors="coerce")
+    # Datas
+    if "Data" in df.columns:
+        df["Data"] = pd.to_datetime(df["Data"], errors="coerce").dt.date
+    # Duração (Total - Horas) -> horas decimais
+    def parse_duration(x):
+        s = str(x)
+        if "1899" in s:  # casos vindos do Excel como datetime
+            t = pd.to_datetime(s, errors="coerce")
+            if pd.notnull(t):
+                return (t.hour*3600 + t.minute*60 + t.second)/3600
+            return np.nan
+        # tenta hh:mm:ss
         try:
-            total_horas = pd.to_timedelta(df["Total - Horas"]).dt.total_seconds().sum() / 3600
-            st.metric("Horas Totais", f"{total_horas:,.2f}".replace(",", "."))
+            td = pd.to_timedelta(s)
+            return td.total_seconds()/3600
         except:
-            st.warning("⚠️ Coluna 'Total - Horas' não está em formato de hora válido.")
+            return np.nan
+    if "Total - Horas" in df.columns:
+        df["Horas (dec)"] = df["Total - Horas"].apply(parse_duration)
+    return df
 
-else:
-    st.info("📂 Faça upload de um arquivo para ver os gráficos.")
+st.title("QPL Flexo Dashboard — Etapa 01")
+df = load_data()
+st.caption(f"Registros carregados: {len(df):,}")
+
+# KPIs básicos
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("Produção Total (Kg)", f"{df.get('Kg Produzido', pd.Series()).sum():,.0f}")
+with col2:
+    horas = df.get("Horas (dec)", pd.Series()).sum()
+    st.metric("Horas Totais", f"{horas:,.2f}")
+with col3:
+    prod = df.get("Kg Produzido", pd.Series()).sum()
+    eff = prod / horas if horas and horas > 0 else 0
+    st.metric("Eficiência Média (Kg/h)", f"{eff:,.2f}")
+with col4:
+    apara = df.get("Kg Apara", pd.Series()).sum()
+    aproveitamento = (prod / (prod + apara) * 100) if (prod + apara) > 0 else 0
+    st.metric("Aproveitamento (%)", f"{aproveitamento:,.2f}")
+
+st.divider()
+st.subheader("Pré-visualização da base (topo)")
+st.dataframe(df.head(50), use_container_width=True)
