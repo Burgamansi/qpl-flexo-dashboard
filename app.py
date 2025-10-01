@@ -13,21 +13,24 @@ df = pd.read_csv(url)
 # Corrigir nomes de colunas
 df.columns = df.columns.str.strip().str.replace("\n", " ", regex=True)
 
-# 🔑 Converter a coluna Data corretamente (formato tipo '01/set.')
+# 🔑 Traduzir meses PT -> EN
+meses = {
+    "jan.": "Jan", "fev.": "Feb", "mar.": "Mar", "abr.": "Apr", "mai.": "May", "jun.": "Jun",
+    "jul.": "Jul", "ago.": "Aug", "set.": "Sep", "out.": "Oct", "nov.": "Nov", "dez.": "Dec"
+}
+df["Data"] = df["Data"].replace(meses, regex=True)
+
+# Converter para datetime (agora reconhece)
 df["Data"] = pd.to_datetime(df["Data"], format="%d/%b", errors="coerce")
 
-# Adicionar ano fixo (2025, por exemplo) porque no Google Sheets não vem ano
+# Adicionar ano fixo
 df["Data"] = df["Data"].apply(lambda x: x.replace(year=2025) if pd.notnull(x) else x)
 
 # Criar coluna Mês/Ano
 df["Mes_Ano"] = df["Data"].dt.strftime("%m/%Y")
 
-# --- Filtros na barra lateral ---
-st.sidebar.header("🔍 Filtros")
-mes_filtro = st.sidebar.selectbox("Selecione o mês", df["Mes_Ano"].dropna().unique())
-
-# Filtrar
-df_filtrado = df[df["Mes_Ano"] == mes_filtro]
+# --- Como você só tem Setembro, não precisa nem filtro ---
+df_filtrado = df[df["Mes_Ano"] == "09/2025"]
 
 # Agrupar por Data
 df_daily = df_filtrado.groupby("Data")[["Kg Produzido", "Metragem"]].sum().reset_index()
@@ -37,7 +40,7 @@ st.subheader("📋 Tabela de Produção (dados filtrados)")
 st.dataframe(df_filtrado)
 
 # --- Gráfico ---
-st.subheader(f"📈 Produção Diária ({mes_filtro})")
+st.subheader("📈 Produção Diária - Setembro/2025")
 
 fig, ax1 = plt.subplots(figsize=(10,5))
 
