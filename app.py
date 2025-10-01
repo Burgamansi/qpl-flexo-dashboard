@@ -36,6 +36,9 @@ mes_filtro = st.sidebar.selectbox("Selecione o mês", df["Mes_Ano"].dropna().uni
 df_filtrado = df[df["Mes_Ano"] == mes_filtro]
 df_daily = df_filtrado.groupby("Data")[["Kg Produzido", "Metragem"]].sum().reset_index()
 
+# Converter metragem para milheiros
+df_daily["Metragem_milheiros"] = df_daily["Metragem"] / 1000
+
 # --- Tabela ---
 st.subheader("📋 Tabela de Produção (dados filtrados)")
 st.dataframe(df_filtrado)
@@ -47,7 +50,7 @@ fig, ax1 = plt.subplots(figsize=(12,6))
 
 # Barras - Kg Produzido
 barras = ax1.bar(df_daily["Data"], df_daily["Kg Produzido"], color="skyblue", label="Kg Produzido")
-ax1.set_ylabel("Kg Produzido", color="blue")
+ax1.set_ylabel("Kg Produzido (kg)", color="blue")
 ax1.tick_params(axis="y", labelcolor="blue")
 
 # Rótulos formatados com pontos
@@ -56,11 +59,15 @@ for b in barras:
     ax1.text(b.get_x() + b.get_width()/2, valor + 200, f"{valor:,.0f}".replace(",", "."),
              ha="center", va="bottom", fontsize=8, color="black")
 
-# Linha - Metragem
+# Linha - Metragem em milheiros
 ax2 = ax1.twinx()
-ax2.plot(df_daily["Data"], df_daily["Metragem"], color="red", marker="o", label="Metragem")
-ax2.set_ylabel("Metragem", color="red")
+ax2.plot(df_daily["Data"], df_daily["Metragem_milheiros"], color="red", marker="o", linewidth=2, label="Metragem (milheiros)")
+ax2.set_ylabel("Metragem (milheiros)", color="red")
 ax2.tick_params(axis="y", labelcolor="red")
+
+# Rótulos da linha
+for x, y in zip(df_daily["Data"], df_daily["Metragem_milheiros"]):
+    ax2.text(x, y + 0.3, f"{y:,.1f}".replace(",", "."), ha="center", fontsize=8, color="red")
 
 plt.xticks(rotation=45)
 fig.tight_layout()
