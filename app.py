@@ -1,46 +1,63 @@
-# --- Filtros ---
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+# --- Carregar dados ---
+url = "https://docs.google.com/spreadsheets/d/1q1TJlJAdGBwX_l2KKKzuSisYbibJht6GwKAT9D7X9dY/export?format=csv"
+df = pd.read_csv(url)
+
+# Corrigir nomes
+df.columns = df.columns.str.strip().str.replace("\n", " ", regex=True)
+
+# Converter datas
+df["Data"] = pd.to_datetime(df["Data"], format="%d/%b", errors="coerce")
+df["Mes_Ano"] = df["Data"].dt.strftime("%m/%Y")
+
+# --- Barra lateral ---
 st.sidebar.header("🔍 Filtros")
-mes_filtro = st.sidebar.selectbox("Selecione o mês", df["Mes_Ano"].dropna().unique())
+turno = st.sidebar.multiselect("Selecione o turno:", df["Turno"].unique())
+operador = st.sidebar.multiselect("Selecione o operador:", df["Nome Operador"].unique())
+mes = st.sidebar.selectbox("Selecione o mês:", df["Mes_Ano"].dropna().unique())
 
-# Criar df filtrado
-df_filtrado = df[df["Mes_Ano"] == mes_filtro]
+# --- Filtrar dados ---
+df_filtrado = df.copy()
+if turno:
+    df_filtrado = df_filtrado[df_filtrado["Turno"].isin(turno)]
+if operador:
+    df_filtrado = df_filtrado[df_filtrado["Nome Operador"].isin(operador)]
+if mes:
+    df_filtrado = df_filtrado[df_filtrado["Mes_Ano"] == mes]
 
-# Agrupar por Data
-df_daily = df_filtrado.groupby("Data")[["Kg Produzido", "Metragem"]].sum().reset_index()
-df_daily["Metragem_milheiros"] = df_daily["Metragem"] / 1000
+# --- Indicadores principais ---
+total_horas = df_filtrado["Total - Horas"].sum()
+total_paradas = df_filtrado["Cód. Parada"].count()
+media_horas = df_filtrado.groupby("Nome Operador")["Total - Horas"].sum().mean()
 
-# --- Tabela ---
-st.subheader("📋 Tabela de Produção (dados filtrados)")
-st.dataframe(df_filtrado)
+col1, col2, col3 = st.columns(3)
+col1.metric("⏱️ Total de Horas", f"{total_horas:,.0f}")
+col2.metric("⚠️ Nº Paradas", f"{total_paradas}")
+col3.metric("📊 Média Horas por Operador", f"{media_horas:,.1f}")
 
-# --- Gráfico ---
-if not df_filtrado.empty:
-    st.subheader(f"📈 Produção Diária ({mes_filtro})")
+# --- Gráficos ---
+st.subheader("📊 Horas Totais por Operador")
+fig1 = px.bar(df_filtrado.groupby("Nome Operador")["Total - Horas"].sum().reset_index(),
+              x="Nome Operador", y="Total - Horas", color="Nome Operador", text="Total - Horas")
+st.plotly_chart(fig1)
 
-    fig, ax1 = plt.subplots(figsize=(12,6))
+st.subheader("📊 Distribuição de Códigos de Paradas")
+fig2 = px.pie(df_filtrado, names="Cód. Parada", title="Códigos de Paradas (%)")
+st.plotly_chart(fig2)
 
-    # Barras (Kg Produzido)
-    barras = ax1.bar(df_daily["Data"], df_daily["Kg Produzido"], color="seagreen", label="Kg Produzido")
-    ax1.set_ylabel("Kg Produzido (kg)", color="seagreen")
+st.subheader("📈 Evolução de Horas por Dia")
+fig3 = px.line(df_filtrado.groupby("Data")["Total - Horas"].sum().reset_index(),
+               x="Data", y="Total - Horas", markers=True)
+st.plotly_chart(fig3)
 
-    # Rótulos das barras
-    for b in barras:
-        valor = b.get_height()
-        ax1.text(b.get_x() + b.get_width()/2, valor + 200,
-                 f"{valor:,.0f}".replace(",", "."),
-                 ha="center", va="bottom", fontsize=8, color="black")
+# --- Tabela resumo ---
+st.subheader("📋 Resumo por Operador e Turno")
+tabela = df_filtrado.groupby(["Nome Operador", "Turno"]).agg({
+    "Total - Horas": "sum",
+    "Cód. Parada": "count"
+}).reset_index().rename(columns={"Cód. Parada": "Nº Paradas"})
 
-    # Linha (Metragem em milheiros)
-    ax2 = ax1.twinx()
-    ax2.plot(df_daily["Data"], df_daily["Metragem_milheiros"], color="darkorange", marker="o", linewidth=2, label="Metragem (milheiros)")
-    ax2.set_ylabel("Metragem (milheiros)", color="darkorange")
-
-    for x, y in zip(df_daily["Data"], df_daily["Metragem_milheiros"]):
-        ax2.text(x, y + 0.3, f"{y:,.1f}".replace(",", "."),
-                 ha="center", fontsize=8, color="darkorange")
-
-    plt.xticks(rotation=45)
-    fig.tight_layout()
-    st.pyplot(fig)
-else:
-    st.warning("⚠️ Nenhum dado encontrado para exibir no gráfico.")
+st.dataframe(tabela)
