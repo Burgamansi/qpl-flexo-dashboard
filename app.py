@@ -24,9 +24,9 @@ meses_pt = {
     "Oct": "Outubro", "Nov": "Novembro", "Dec": "Dezembro"
 }
 
-# Criar coluna Mes_Ano com meses traduzidos
+# Criar coluna Mes_Ano -> garante string
 df["Mes_Ano"] = df["Data"].dt.strftime("%b/%Y")
-df["Mes_Ano"] = df["Mes_Ano"].apply(lambda x: x.replace(x.split("/")[0], meses_pt[x.split("/")[0]]))
+df["Mes_Ano"] = df["Mes_Ano"].astype(str).str.split("/").str[0].map(meses_pt) + "/" + df["Data"].dt.year.astype(str)
 
 # --- Filtro lateral ---
 st.sidebar.header("🔍 Filtros")
