@@ -8,7 +8,7 @@ url = "https://docs.google.com/spreadsheets/d/1q1TJlJAdGBwX_l2KKKzuSisYbibJht6Gw
 
 # Carregar dados
 df = pd.read_csv(url)
-
+st.write("Colunas encontradas:", list(df.columns))
 st.subheader("📑 Tabela de Produção")
 st.dataframe(df)
 
