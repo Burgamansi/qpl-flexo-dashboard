@@ -11,6 +11,10 @@ url = "https://docs.google.com/spreadsheets/d/1q1TJlJAdGBwX_l2KKKzuSisYbibJht6Gw
 df = pd.read_csv(url)
 df.columns = df.columns.str.strip().str.replace("\n", " ", regex=True)
 
+# ✅ Garantir que as colunas numéricas realmente sejam números
+for col in ["Kg Produzido", "Metragem"]:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
+
 # ✅ Ajustar datas no formato '01/set.'
 df["Data"] = df["Data"].astype(str).str.replace(".", "", regex=False).str.strip()
 
@@ -66,9 +70,9 @@ ax.bar([i + largura_barra/2 for i in x], df_daily["Kg Produzido"]/1000,
 
 # Valores em cima das barras
 for i, row in df_daily.iterrows():
-    ax.text(i - largura_barra/2, row["Metragem"]/1000 + 0.3, f'{row["Metragem"]/1000:.1f}', 
+    ax.text(i - largura_barra/2, (row["Metragem"]/1000) + 0.3, f'{row["Metragem"]/1000:.1f}', 
             ha='center', fontsize=8, color="black", rotation=90)
-    ax.text(i + largura_barra/2, row["Kg Produzido"]/1000 + 0.3, f'{row["Kg Produzido"]/1000:.1f}', 
+    ax.text(i + largura_barra/2, (row["Kg Produzido"]/1000) + 0.3, f'{row["Kg Produzido"]/1000:.1f}', 
             ha='center', fontsize=8, color="black", rotation=90)
 
 # Eixo X
