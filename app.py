@@ -4,31 +4,30 @@ import matplotlib.pyplot as plt
 
 st.title("📊 Flexografia – Produção QPL")
 
-# --- Link da sua planilha (exportada como CSV do Google Sheets) ---
+# --- Link da sua planilha em CSV (Google Sheets) ---
 url = "https://docs.google.com/spreadsheets/d/1q1TJlJAdGBwX_l2KKKzuSisYbibJht6GwKAT9D7X9dY/export?format=csv"
 
-# --- Carregar dados ---
-df = pd.read_csv(url)
+# --- Carregar dados, já forçando a coluna Data como datetime ---
+df = pd.read_csv(url, parse_dates=["Data"], dayfirst=True)
 
 # Corrigir nomes de colunas (tirar espaços extras e quebras de linha)
 df.columns = df.columns.str.strip().str.replace("\n", " ", regex=True)
 
-# Converter a coluna "Data" para datetime
-df["Data"] = pd.to_datetime(df["Data"], errors="coerce", dayfirst=True)
+# Se Data não for datetime, tentar converter
+if df["Data"].dtype != "datetime64[ns]":
+    df["Data"] = pd.to_datetime(df["Data"], errors="coerce", dayfirst=True)
 
-# Criar coluna Mês/Ano para o filtro
-df["Mes_Ano"] = df["Data"].dt.strftime("%B/%Y")  # exemplo: September/2025
+# Criar coluna Mês/Ano para filtro
+df["Mes_Ano"] = df["Data"].dt.strftime("%m/%Y")  # Exemplo: 09/2025
 
 # --- Filtros na barra lateral ---
 st.sidebar.header("🔍 Filtros")
-
-# Filtro por mês
 mes_filtro = st.sidebar.selectbox("Selecione o mês", df["Mes_Ano"].dropna().unique())
 
-# Filtrar o dataframe
+# Filtrar o dataframe pelo mês escolhido
 df_filtrado = df[df["Mes_Ano"] == mes_filtro]
 
-# Agrupar por data e somar Kg Produzido e Metragem
+# Agrupar por data e somar
 df_daily = df_filtrado.groupby("Data")[["Kg Produzido", "Metragem"]].sum().reset_index()
 
 # --- Exibir tabela resumo ---
@@ -51,9 +50,8 @@ ax2.plot(df_daily["Data"], df_daily["Metragem"], color="red", marker="o", label=
 ax2.set_ylabel("Metragem", color="red")
 ax2.tick_params(axis="y", labelcolor="red")
 
-# Melhorar layout do eixo X (datas dia a dia)
+# Melhorar leitura do eixo X (datas)
 plt.xticks(rotation=45)
 fig.tight_layout()
 
-# Mostrar gráfico no Streamlit
 st.pyplot(fig)
