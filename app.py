@@ -15,13 +15,22 @@ def load_data():
     df = pd.read_csv(SHEET_CSV)
 
     # Normaliza nomes das colunas
-    df.columns = [c.strip().replace("\n", " ") for c in df.columns]
+    df.columns = (
+        df.columns.str.strip()
+        .str.replace("\n", " ")
+        .str.replace("  ", " ")
+        .str.replace("\xa0", " ")
+    )
 
-    # Converte numéricos
-    num_cols = ["Largura", "Kg Produzido", "Metragem", "Gramatura", "Kg Apara"]
-    for c in num_cols:
+    # Converte numéricos de forma robusta
+    for c in ["Largura", "Kg Produzido", "Metragem", "Gramatura", "Kg Apara"]:
         if c in df.columns:
-            df[c] = pd.to_numeric(df[c].astype(str).str.replace(",", "."), errors="coerce")
+            df[c] = (
+                df[c].astype(str)
+                .str.replace(",", ".")
+                .str.extract(r"(\d+\.?\d*)")[0]
+            )
+            df[c] = pd.to_numeric(df[c], errors="coerce")
 
     # Converte Data
     if "Data" in df.columns:
@@ -53,8 +62,11 @@ df = load_data()
 st.title("📊 QPL Flexo Dashboard")
 st.caption(f"Registros carregados: {len(df):,}")
 
-# Debug: listar colunas
-st.write("📝 Colunas encontradas:", df.columns.tolist())
+# Debug: listar colunas e exemplos
+st.write("📌 Colunas detectadas:", df.columns.tolist())
+for col in ["Kg Produzido", "Metragem", "Horas (dec)"]:
+    if col in df.columns:
+        st.write(f"Exemplo {col}:", df[col].head(10).tolist())
 
 # Preview
 st.dataframe(df.head(20), use_container_width=True)
