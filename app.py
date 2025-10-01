@@ -2,62 +2,46 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# --- Carregar dados ---
-url = "https://docs.google.com/spreadsheets/d/1q1TJlJAdGBwX_l2KKKzuSisYbibJht6GwKAT9D7X9dY/export?format=csv"
-df = pd.read_csv(url)
+st.set_page_config(page_title="Dashboard Produção QPL", layout="wide")
 
-# Corrigir nomes
-df.columns = df.columns.str.strip().str.replace("\n", " ", regex=True)
+st.title("📊 Dashboard de Produção - Flexografia QPL")
 
-# Converter datas
-df["Data"] = pd.to_datetime(df["Data"], format="%d/%b", errors="coerce")
-df["Mes_Ano"] = df["Data"].dt.strftime("%m/%Y")
+uploaded_file = st.file_uploader("Carregar planilha de produção", type=["xlsx", "csv"])
 
-# --- Barra lateral ---
-st.sidebar.header("🔍 Filtros")
-turno = st.sidebar.multiselect("Selecione o turno:", df["Turno"].unique())
-operador = st.sidebar.multiselect("Selecione o operador:", df["Nome Operador"].unique())
-mes = st.sidebar.selectbox("Selecione o mês:", df["Mes_Ano"].dropna().unique())
+if uploaded_file:
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8")
+    else:
+        df = pd.read_excel(uploaded_file)
 
-# --- Filtrar dados ---
-df_filtrado = df.copy()
-if turno:
-    df_filtrado = df_filtrado[df_filtrado["Turno"].isin(turno)]
-if operador:
-    df_filtrado = df_filtrado[df_filtrado["Nome Operador"].isin(operador)]
-if mes:
-    df_filtrado = df_filtrado[df_filtrado["Mes_Ano"] == mes]
+    st.subheader("📑 Dados Carregados")
+    st.dataframe(df, use_container_width=True)
 
-# --- Indicadores principais ---
-total_horas = df_filtrado["Total - Horas"].sum()
-total_paradas = df_filtrado["Cód. Parada"].count()
-media_horas = df_filtrado.groupby("Nome Operador")["Total - Horas"].sum().mean()
+    # --- Produção por Operador ---
+    st.subheader("👤 Produção por Operador")
+    fig_op = px.bar(df, x="Nome Operador", y="Kg Produzido", text="Kg Produzido", color="Nome Operador")
+    fig_op.update_traces(texttemplate='%{text:,.0f}', textposition="outside")
+    st.plotly_chart(fig_op, use_container_width=True)
 
-col1, col2, col3 = st.columns(3)
-col1.metric("⏱️ Total de Horas", f"{total_horas:,.0f}")
-col2.metric("⚠️ Nº Paradas", f"{total_paradas}")
-col3.metric("📊 Média Horas por Operador", f"{media_horas:,.1f}")
+    # --- Produção por Turno ---
+    st.subheader("🌙 Produção por Turno")
+    fig_turno = px.pie(df, names="Turno", values="Kg Produzido")
+    st.plotly_chart(fig_turno, use_container_width=True)
 
-# --- Gráficos ---
-st.subheader("📊 Horas Totais por Operador")
-fig1 = px.bar(df_filtrado.groupby("Nome Operador")["Total - Horas"].sum().reset_index(),
-              x="Nome Operador", y="Total - Horas", color="Nome Operador", text="Total - Horas")
-st.plotly_chart(fig1)
+    # --- Códigos de Parada ---
+    st.subheader("🛑 Códigos de Parada")
+    paradas = df.groupby("Cód. Parada").size().reset_index(name="Qtde")
+    fig_paradas = px.bar(paradas, x="Cód. Parada", y="Qtde", text="Qtde", color="Cód. Parada")
+    st.plotly_chart(fig_paradas, use_container_width=True)
 
-st.subheader("📊 Distribuição de Códigos de Paradas")
-fig2 = px.pie(df_filtrado, names="Cód. Parada", title="Códigos de Paradas (%)")
-st.plotly_chart(fig2)
+    # --- Total de Horas ---
+    st.subheader("⏱️ Total de Horas")
+    if "Total - Horas" in df.columns:
+        try:
+            total_horas = pd.to_timedelta(df["Total - Horas"]).dt.total_seconds().sum() / 3600
+            st.metric("Horas Totais", f"{total_horas:,.2f}".replace(",", "."))
+        except:
+            st.warning("⚠️ Coluna 'Total - Horas' não está em formato de hora válido.")
 
-st.subheader("📈 Evolução de Horas por Dia")
-fig3 = px.line(df_filtrado.groupby("Data")["Total - Horas"].sum().reset_index(),
-               x="Data", y="Total - Horas", markers=True)
-st.plotly_chart(fig3)
-
-# --- Tabela resumo ---
-st.subheader("📋 Resumo por Operador e Turno")
-tabela = df_filtrado.groupby(["Nome Operador", "Turno"]).agg({
-    "Total - Horas": "sum",
-    "Cód. Parada": "count"
-}).reset_index().rename(columns={"Cód. Parada": "Nº Paradas"})
-
-st.dataframe(tabela)
+else:
+    st.info("📂 Faça upload de um arquivo para ver os gráficos.")
