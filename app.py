@@ -11,31 +11,43 @@ df = pd.read_csv(url)
 # Corrigir nomes das colunas
 df.columns = df.columns.str.strip().str.replace("\n", " ", regex=True)
 
-# Converter "Data" corretamente (forçando como texto e depois para datetime)
-df["Data"] = pd.to_datetime(df["Data"], errors="coerce", dayfirst=True, format="%d/%b")
+# --- Conversão da coluna Data ---
+# Criar dicionário para meses abreviados em português
+mapa_meses = {
+    "jan": "01", "fev": "02", "mar": "03", "abr": "04", "mai": "05", "jun": "06",
+    "jul": "07", "ago": "08", "set": "09", "out": "10", "nov": "11", "dez": "12"
+}
 
-# Se não reconhecer, tentar de novo com variações
-if df["Data"].isna().sum() > 0:
-    df["Data"] = pd.to_datetime(df["Data"], errors="coerce", dayfirst=True, infer_datetime_format=True)
+# Normalizar strings da coluna Data
+df["Data"] = df["Data"].astype(str).str.replace(".", "", regex=False).str.strip()
 
-# Exibir tabela inicial
+# Substituir abreviações por números
+for mes_pt, mes_num in mapa_meses.items():
+    df["Data"] = df["Data"].str.replace(mes_pt, mes_num, regex=False)
+
+# Agora converter para datetime (ano fixo 2025)
+df["Data"] = pd.to_datetime(df["Data"] + "/2025", format="%d/%m/%Y", errors="coerce")
+
+# Criar coluna Mês/Ano
+df["MesAno"] = df["Data"].dt.strftime("%B/%Y")
+
+# --- Exibir tabela inicial ---
 st.subheader("📑 Tabela de Produção")
 st.dataframe(df)
 
 # --- FILTROS ---
 st.sidebar.header("🔎 Filtros")
 
-# Criar coluna de mês/ano em português
-df["MesAno"] = df["Data"].dt.strftime("%B/%Y")  # ex: "setembro/2025"
-
 meses = df["MesAno"].dropna().unique()
 mes_filtro = st.sidebar.selectbox("Selecione o mês", sorted(meses))
 
-# Filtrar pelo mês escolhido
 df_filtrado = df[df["MesAno"] == mes_filtro]
 
-# Seleção de variáveis
-opcoes = st.sidebar.multiselect("Selecione métricas para exibir:", ["Kg Produzido", "Metragem"], default=["Kg Produzido","Metragem"])
+opcoes = st.sidebar.multiselect(
+    "Selecione métricas para exibir:", 
+    ["Kg Produzido", "Metragem"], 
+    default=["Kg Produzido","Metragem"]
+)
 
 # --- AGRUPAMENTO ---
 df_daily = df_filtrado.groupby("Data")[["Kg Produzido", "Metragem"]].sum().reset_index()
@@ -45,13 +57,11 @@ st.subheader(f"📈 Produção Diária ({mes_filtro})")
 
 fig, ax1 = plt.subplots(figsize=(10,5))
 
-# Barras para Kg Produzido (se selecionado)
 if "Kg Produzido" in opcoes:
     ax1.bar(df_daily["Data"], df_daily["Kg Produzido"], color="skyblue", label="Kg Produzido")
     ax1.set_ylabel("Kg Produzido", color="blue")
     ax1.tick_params(axis="y", labelcolor="blue")
 
-# Linha para Metragem (se selecionado)
 if "Metragem" in opcoes:
     ax2 = ax1.twinx()
     ax2.plot(df_daily["Data"], df_daily["Metragem"], color="red", marker="o", label="Metragem")
