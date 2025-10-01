@@ -14,24 +14,31 @@ SHEET_CSV = "https://docs.google.com/spreadsheets/d/1q1TJlJAdGBwX_l2KKKzuSisYbib
 def load_data():
     df = pd.read_csv(SHEET_CSV)
 
-    # Normaliza nomes das colunas (remove espaços extras e quebras de linha)
+    # Normaliza nomes das colunas
     df.columns = [c.strip().replace("\n", " ") for c in df.columns]
 
-    # Tenta converter colunas numéricas
+    # Converte numéricos
     num_cols = ["Largura", "Kg Produzido", "Metragem", "Gramatura", "Kg Apara"]
     for c in num_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c].astype(str).str.replace(",", "."), errors="coerce")
 
-    # Converte datas
+    # Converte Data
     if "Data" in df.columns:
         df["Data"] = pd.to_datetime(df["Data"], errors="coerce").dt.date
 
-    # Converte horas para decimal
+    # Converte "Total - Horas" em decimal
     def parse_duration(x):
         try:
-            td = pd.to_timedelta(str(x))
-            return td.total_seconds()/3600
+            partes = str(x).split(":")
+            if len(partes) == 2:  # hh:mm
+                h, m = int(partes[0]), int(partes[1])
+                return h + m/60
+            elif len(partes) == 3:  # hh:mm:ss
+                h, m, s = int(partes[0]), int(partes[1]), int(partes[2])
+                return h + m/60 + s/3600
+            else:
+                return pd.to_timedelta(str(x)).total_seconds()/3600
         except:
             return np.nan
 
@@ -46,15 +53,13 @@ df = load_data()
 st.title("📊 QPL Flexo Dashboard")
 st.caption(f"Registros carregados: {len(df):,}")
 
-# Mostrar colunas disponíveis (debug)
-st.write("📝 Colunas na base:", df.columns.tolist())
+# Debug: listar colunas
+st.write("📝 Colunas encontradas:", df.columns.tolist())
 
-# Preview da base
+# Preview
 st.dataframe(df.head(20), use_container_width=True)
 
-# ============================
-# Abas
-# ============================
+# Criar abas
 aba1, aba2, aba3, aba4 = st.tabs(["📌 Resumo", "👷 Operadores", "🏭 Clientes", "⚡ Paradas"])
 
 # ============================
@@ -63,24 +68,21 @@ aba1, aba2, aba3, aba4 = st.tabs(["📌 Resumo", "👷 Operadores", "🏭 Client
 with aba1:
     st.subheader("Resumo dos Indicadores")
 
-    col1, col2, col3, col4 = st.columns(4)
     kg_col = "Kg Produzido"
     horas_col = "Horas (dec)"
     apara_col = "Kg Apara"
 
-    # Produção total
+    col1, col2, col3, col4 = st.columns(4)
+
+    # Produção Total
     with col1:
         if kg_col in df.columns:
             st.metric("Produção Total (Kg)", f"{df[kg_col].sum():,.0f}")
-        else:
-            st.warning(f"Coluna '{kg_col}' não encontrada.")
 
-    # Horas totais
+    # Horas Totais
     with col2:
         if horas_col in df.columns:
             st.metric("Horas Totais", f"{df[horas_col].sum():,.2f}")
-        else:
-            st.warning(f"Coluna '{horas_col}' não encontrada.")
 
     # Eficiência
     with col3:
@@ -89,8 +91,6 @@ with aba1:
             horas = df[horas_col].sum()
             eff = prod / horas if horas > 0 else 0
             st.metric("Eficiência Média (Kg/h)", f"{eff:,.2f}")
-        else:
-            st.warning("Colunas para eficiência não encontradas.")
 
     # Aproveitamento
     with col4:
@@ -99,14 +99,22 @@ with aba1:
             apara = df[apara_col].sum()
             aproveitamento = (prod / (prod + apara) * 100) if (prod + apara) > 0 else 0
             st.metric("Aproveitamento (%)", f"{aproveitamento:,.2f}")
-        else:
-            st.warning("Colunas para aproveitamento não encontradas.")
 
-    # Produção ao longo do tempo
-    if "Data" in df.columns and kg_col in df.columns:
-        st.subheader("📈 Produção ao longo do tempo")
-        df_time = df.groupby("Data")[kg_col].sum().reset_index()
-        fig = px.line(df_time, x="Data", y=kg_col, markers=True, title="Kg produzido por dia")
+    # Produção diária: barras (Kg) + linha (Metragem)
+    if "Data" in df.columns and kg_col in df.columns and "Metragem" in df.columns:
+        st.subheader("📊 Produção diária - Kg (barras) x Metragem (linha)")
+
+        df_day = df.groupby("Data")[[kg_col, "Metragem"]].sum().reset_index()
+
+        fig = px.bar(df_day, x="Data", y=kg_col, title="Produção diária - Kg e Metragem")
+        fig.add_scatter(x=df_day["Data"], y=df_day["Metragem"], mode="lines+markers",
+                        name="Metragem", yaxis="y2")
+
+        fig.update_layout(
+            yaxis=dict(title="Kg Produzido"),
+            yaxis2=dict(title="Metragem", overlaying="y", side="right"),
+            legend=dict(orientation="h", y=-0.3)
+        )
         st.plotly_chart(fig, use_container_width=True)
 
 # ============================
@@ -132,10 +140,12 @@ with aba3:
 # ⚡ Paradas
 # ============================
 with aba4:
-    if "Descrição do Código" in df.columns:
-        st.subheader("Códigos de Parada mais Frequentes")
-        parada_df = df.groupby("Descrição do Código").size().reset_index(name="Frequência")
-        parada_df = parada_df.sort_values("Frequência", ascending=False).head(10)
-        fig = px.bar(parada_df, x="Descrição do Código", y="Frequência",
-                     title="Top paradas registradas", text_auto=True)
-        st.plotly_chart(fig, use_container_width=True)
+    if "Data" in df.columns and horas_col in df.columns:
+        st.subheader("⚡ Paradas por Dia (Total de Horas)")
+        df_parada = df.groupby("Data")[horas_col].sum().reset_index()
+
+        fig2 = px.bar(df_parada, x="Data", y=horas_col,
+                      title="Total de Horas de Parada por Dia",
+                      text_auto=".2f")
+        fig2.update_layout(yaxis=dict(title="Horas Totais"))
+        st.plotly_chart(fig2, use_container_width=True)
