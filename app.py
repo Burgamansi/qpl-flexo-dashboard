@@ -13,16 +13,16 @@ df = pd.read_csv(url)
 # Corrigir nomes de colunas
 df.columns = df.columns.str.strip().str.replace("\n", " ", regex=True)
 
-# 🔑 Converter a coluna Data corretamente
+# Converter a coluna Data corretamente
 df["Data"] = pd.to_datetime(df["Data"], format="%d/%b", errors="coerce")
 
-# Fixar ano (2025)
+# Fixar ano
 df["Data"] = df["Data"].apply(lambda x: x.replace(year=2025) if pd.notnull(x) else x)
 
 # Criar coluna Mês/Ano
 df["Mes_Ano"] = df["Data"].dt.strftime("%m/%Y")
 
-# --- Filtros na barra lateral ---
+# --- Filtros ---
 st.sidebar.header("🔍 Filtros")
 mes_filtro = st.sidebar.selectbox("Selecione o mês", df["Mes_Ano"].dropna().unique())
 
@@ -39,26 +39,21 @@ st.dataframe(df_filtrado)
 # --- Gráfico ---
 st.subheader(f"📈 Produção Diária ({mes_filtro})")
 
-fig, ax1 = plt.subplots(figsize=(10,5))
+# Converter Metragem para milheiros (dividir por 1000)
+df_daily["Metragem (milheiro)"] = df_daily["Metragem"] / 1000
 
-# Barras (Kg Produzido)
-ax1.bar(df_daily["Data"], df_daily["Kg Produzido"], color="skyblue", label="Kg Produzido")
-ax1.set_ylabel("Kg Produzido", color="blue")
-ax1.tick_params(axis="y", labelcolor="blue")
+fig, ax = plt.subplots(figsize=(10,5))
 
-# Linha (Metragem)
-ax2 = ax1.twinx()
-ax2.plot(df_daily["Data"], df_daily["Metragem"], color="red", marker="o", linestyle="-", linewidth=2, label="Metragem")
-ax2.set_ylabel("Metragem", color="red")
-ax2.tick_params(axis="y", labelcolor="red")
+# Barras empilhadas
+ax.bar(df_daily["Data"], df_daily["Metragem (milheiro)"], color="orange", label="Metragem (milheiros)")
+ax.bar(df_daily["Data"], df_daily["Kg Produzido"]/1000, color="green", label="Kg Produzido (milheiros eqv.)")
 
-# Melhorar eixo X
-ax1.set_xticks(df_daily["Data"])
-ax1.set_xticklabels(df_daily["Data"].dt.strftime("%d/%m"), rotation=45)
-
-# Legendas
-ax1.legend(loc="upper left")
-ax2.legend(loc="upper right")
+# Rótulos e estilo
+ax.set_ylabel("Produção (milheiros)", fontsize=12)
+ax.set_xlabel("Data", fontsize=12)
+ax.set_xticks(df_daily["Data"])
+ax.set_xticklabels(df_daily["Data"].dt.strftime("%d/%m"), rotation=45)
+ax.legend()
 
 plt.tight_layout()
 st.pyplot(fig)
