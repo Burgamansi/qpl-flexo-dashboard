@@ -14,7 +14,7 @@ SHEET_CSV = "https://docs.google.com/spreadsheets/d/1q1TJlJAdGBwX_l2KKKzuSisYbib
 def load_data():
     df = pd.read_csv(SHEET_CSV)
 
-    # Renomear colunas para evitar problemas
+    # Renomear colunas
     rename_map = {
         "Kg\nProduzido": "Kg Produzido",
         "KgProduzido": "Kg Produzido",
@@ -22,21 +22,19 @@ def load_data():
         "Total - Horas": "Total Horas"
     }
     df.rename(columns=rename_map, inplace=True)
+    df.columns = [c.strip() for c in df.columns]
 
-    # Normalizar nomes de colunas
-    df.columns = [c.strip().replace("\n", " ").replace("  ", " ") for c in df.columns]
-
-    # Converter colunas numéricas
+    # Conversões numéricas
     num_cols = ["Largura", "Kg Produzido", "Metragem", "Gramatura", "Kg Apara"]
     for c in num_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # Converter colunas de data
+    # Datas
     if "Data" in df.columns:
         df["Data"] = pd.to_datetime(df["Data"], errors="coerce").dt.date
 
-    # Converter Total Horas em decimal (se existir)
+    # Converter horas para decimal
     if "Total Horas" in df.columns:
         def parse_horas(x):
             try:
@@ -50,64 +48,72 @@ def load_data():
 
 df = load_data()
 
-st.title("📊 QPL Flexo Dashboard")
+# ==========================
+# Criar abas
+# ==========================
+aba1, aba2, aba3, aba4 = st.tabs(["📌 Resumo", "👷 Operadores", "🏢 Clientes", "⚡ Paradas"])
 
 # ==========================
-# Resumo dos Indicadores
+# Aba 1 - Resumo
 # ==========================
-col1, col2, col3, col4 = st.columns(4)
+with aba1:
+    st.subheader("📌 Resumo dos Indicadores")
 
-with col1:
-    st.metric("Produção Total (Kg)", f"{df['Kg Produzido'].sum():,.0f}")
-with col2:
-    st.metric("Horas Totais", f"{df['Horas (dec)'].sum():,.2f}")
-with col3:
-    eficiencia = df["Kg Produzido"].sum() / df["Horas (dec)"].sum() if df["Horas (dec)"].sum() > 0 else 0
-    st.metric("Eficiência Média (Kg/h)", f"{eficiencia:,.2f}")
-with col4:
-    aproveitamento = 100 * (1 - (df["Kg Apara"].sum() / df["Kg Produzido"].sum())) if df["Kg Produzido"].sum() > 0 else 0
-    st.metric("Aproveitamento (%)", f"{aproveitamento:,.2f}")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Produção Total (Kg)", f"{df['Kg Produzido'].sum():,.0f}")
+    with col2:
+        st.metric("Horas Totais", f"{df['Horas (dec)'].sum():,.2f}")
+    with col3:
+        eficiencia = df["Kg Produzido"].sum() / df["Horas (dec)"].sum() if df["Horas (dec)"].sum() > 0 else 0
+        st.metric("Eficiência Média (Kg/h)", f"{eficiencia:,.2f}")
+    with col4:
+        aproveitamento = 100 * (1 - (df["Kg Apara"].sum() / df["Kg Produzido"].sum())) if df["Kg Produzido"].sum() > 0 else 0
+        st.metric("Aproveitamento (%)", f"{aproveitamento:,.2f}")
 
-st.divider()
+    st.markdown("### 📊 Produção diária - Kg (barras) e Metragem (linha)")
 
-# ==========================
-# Gráfico Produção diária
-# ==========================
-if "Data" in df.columns and "Kg Produzido" in df.columns and "Metragem" in df.columns:
-    st.subheader("📊 Produção diária - Kg (barras) x Metragem (linha)")
+    if "Data" in df.columns:
+        df_day = df.groupby("Data")[["Kg Produzido", "Metragem"]].sum().reset_index()
 
-    df_day = df.groupby("Data")[["Kg Produzido", "Metragem"]].sum().reset_index()
+        fig = px.bar(df_day, x="Data", y="Kg Produzido", title="Produção diária")
+        fig.add_scatter(x=df_day["Data"], y=df_day["Metragem"], mode="lines+markers", name="Metragem", yaxis="y2")
 
-    fig = px.bar(df_day, x="Data", y="Kg Produzido", title="Produção diária - Kg e Metragem")
-    fig.add_scatter(x=df_day["Data"], y=df_day["Metragem"], mode="lines+markers", name="Metragem")
-
-    fig.update_layout(
-        yaxis=dict(title="Kg Produzido"),
-        yaxis2=dict(title="Metragem", overlaying="y", side="right"),
-        legend=dict(orientation="h", y=-0.3)
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.warning("⚠️ Colunas necessárias ('Data', 'Kg Produzido', 'Metragem') não encontradas.")
-    st.dataframe(df.head(10))  # DEBUG
-
-st.divider()
+        fig.update_layout(
+            yaxis=dict(title="Kg Produzido"),
+            yaxis2=dict(title="Metragem", overlaying="y", side="right")
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 # ==========================
-# Gráfico Paradas
+# Aba 2 - Operadores
 # ==========================
-if "Data" in df.columns and "Horas (dec)" in df.columns:
+with aba2:
+    st.subheader("👷 Produção por Operador")
+    if "Nome Operador" in df.columns:
+        df_op = df.groupby("Nome Operador")[["Kg Produzido", "Horas (dec)"]].sum().reset_index()
+        fig_op = px.bar(df_op, x="Nome Operador", y="Kg Produzido", text_auto=True, title="Kg Produzido por Operador")
+        st.plotly_chart(fig_op, use_container_width=True)
+
+# ==========================
+# Aba 3 - Clientes
+# ==========================
+with aba3:
+    st.subheader("🏢 Produção por Cliente")
+    if "Cliente" in df.columns:
+        df_cli = df.groupby("Cliente")[["Kg Produzido", "Horas (dec)"]].sum().reset_index()
+        fig_cli = px.bar(df_cli, x="Cliente", y="Kg Produzido", text_auto=True, title="Kg Produzido por Cliente")
+        st.plotly_chart(fig_cli, use_container_width=True)
+
+# ==========================
+# Aba 4 - Paradas
+# ==========================
+with aba4:
     st.subheader("⚡ Paradas por Dia (Total de Horas)")
 
-    df_parada = df.groupby("Data")["Horas (dec)"].sum().reset_index()
-
-    fig2 = px.bar(df_parada, x="Data", y="Horas (dec)",
-                  title="Total de Horas de Parada por Dia",
-                  text_auto=".2f")
-
-    fig2.update_layout(yaxis=dict(title="Horas Totais"))
-    st.plotly_chart(fig2, use_container_width=True)
-else:
-    st.warning("⚠️ Colunas necessárias ('Data', 'Horas (dec)') não encontradas.")
-    st.dataframe(df.head(10))  # DEBUG
+    if "Data" in df.columns and "Horas (dec)" in df.columns:
+        df_parada = df.groupby("Data")["Horas (dec)"].sum().reset_index()
+        fig2 = px.bar(df_parada, x="Data", y="Horas (dec)",
+                      title="Total de Horas de Parada por Dia",
+                      text_auto=".2f")
+        st.plotly_chart(fig2, use_container_width=True)
