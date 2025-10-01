@@ -3,25 +3,29 @@ import pandas as pd
 
 st.title("📊 Flexografia – Produção QPL")
 
-# Link da planilha no formato CSV
+# 🔗 Link direto para a planilha Google Sheets (exportar como CSV)
 url = "https://docs.google.com/spreadsheets/d/1q1TJlJAdGBwX_l2KKKzuSisYbibJht6GwKAT9D7X9dY/export?format=csv"
 
-# Carregar dados
+# 📥 Carregar dados
 df = pd.read_csv(url)
 
-# Corrigir nomes das colunas (remove espaços extras e quebras de linha)
+# 🛠️ Corrigir nomes das colunas (remove espaços extras e quebras de linha)
 df.columns = df.columns.str.strip().str.replace("\n", " ", regex=True)
 
-# Mostrar colunas encontradas
-st.write("Colunas corrigidas:", list(df.columns))
+# Mostrar colunas carregadas (debug, pode tirar depois)
+st.write("✅ Colunas encontradas:", list(df.columns))
 
-# Exibir tabela de produção
+# 📑 Mostrar tabela completa
 st.subheader("📑 Tabela de Produção")
 st.dataframe(df)
 
-# Exibir gráfico de produção
+# 📈 Gráfico de Kg Produzido
 st.subheader("📈 Gráfico - Kg Produzido")
-if "Kg Produzido" in df.columns:
-    st.line_chart(df["Kg Produzido"])
+
+# Procurar coluna que contenha "Kg Produzido" (ignora maiúsculas/minúsculas)
+col_kg = [c for c in df.columns if "kg produzido" in c.lower()]
+
+if col_kg:
+    st.line_chart(df[col_kg[0]])
 else:
-    st.warning("Coluna 'Kg Produzido' não encontrada na planilha.")
+    st.warning("⚠️ Nenhuma coluna com 'Kg Produzido' encontrada na planilha.")
