@@ -46,6 +46,16 @@ def load_data():
     else:
         df["Horas Parada"] = 0
 
+    # --- NORMALIZAÇÃO DE MÁQUINA (Nº MQ) ---
+    if "Nº MQ" in df.columns:
+        df["Nº MQ"] = (
+            df["Nº MQ"].astype(str)
+            .str.upper().str.strip()
+            .str.replace(r"[^0-9]", "", regex=True)
+        )
+        df["Nº MQ"] = pd.to_numeric(df["Nº MQ"], errors="coerce")
+        df = df[df["Nº MQ"].notna() & (df["Nº MQ"] > 0)]
+
     return df
 
 df = load_data()
@@ -126,10 +136,18 @@ with aba4:
 # ==========================
 with aba5:
     st.subheader("🏭 Produção por Máquina")
-    if "Nº MQ" in df.columns:
-        df_mq = df.groupby("Nº MQ")[["Kg Produzido", "Horas (dec)"]].sum().reset_index()
-        fig_mq = px.bar(df_mq, x="Nº MQ", y="Kg Produzido", text_auto=True, title="Kg Produzido por Máquina")
-        fig_mq.add_scatter(x=df_mq["Nº MQ"], y=df_mq["Horas (dec)"], mode="lines+markers", name="Horas", yaxis="y2")
+
+    if "Nº MQ" in df.columns and "Kg Produzido" in df.columns and "Horas (dec)" in df.columns:
+        df_mq = (
+            df.groupby("Nº MQ")[["Kg Produzido", "Horas (dec)"]]
+              .sum()
+              .reset_index()
+              .sort_values("Nº MQ")
+        )
+        xcats = df_mq["Nº MQ"].astype(int).astype(str).tolist()
+
+        fig_mq = px.bar(df_mq, x=xcats, y="Kg Produzido", text_auto=True, title="Kg Produzido por Máquina")
+        fig_mq.add_scatter(x=xcats, y=df_mq["Horas (dec)"], mode="lines+markers", name="Horas", yaxis="y2")
         fig_mq.update_layout(yaxis=dict(title="Kg Produzido"),
                              yaxis2=dict(title="Horas", overlaying="y", side="right"))
         st.plotly_chart(fig_mq, use_container_width=True)
