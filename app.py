@@ -11,8 +11,12 @@ df = pd.read_csv(url)
 # Corrigir nomes das colunas
 df.columns = df.columns.str.strip().str.replace("\n", " ", regex=True)
 
-# Garantir que "Data" é realmente data
-df["Data"] = pd.to_datetime(df["Data"], errors="coerce", dayfirst=True)
+# Converter "Data" corretamente (forçando como texto e depois para datetime)
+df["Data"] = pd.to_datetime(df["Data"], errors="coerce", dayfirst=True, format="%d/%b")
+
+# Se não reconhecer, tentar de novo com variações
+if df["Data"].isna().sum() > 0:
+    df["Data"] = pd.to_datetime(df["Data"], errors="coerce", dayfirst=True, infer_datetime_format=True)
 
 # Exibir tabela inicial
 st.subheader("📑 Tabela de Produção")
@@ -20,11 +24,15 @@ st.dataframe(df)
 
 # --- FILTROS ---
 st.sidebar.header("🔎 Filtros")
-meses = df["Data"].dt.strftime("%B/%Y").unique()
-mes_filtro = st.sidebar.selectbox("Selecione o mês", meses)
+
+# Criar coluna de mês/ano em português
+df["MesAno"] = df["Data"].dt.strftime("%B/%Y")  # ex: "setembro/2025"
+
+meses = df["MesAno"].dropna().unique()
+mes_filtro = st.sidebar.selectbox("Selecione o mês", sorted(meses))
 
 # Filtrar pelo mês escolhido
-df_filtrado = df[df["Data"].dt.strftime("%B/%Y") == mes_filtro]
+df_filtrado = df[df["MesAno"] == mes_filtro]
 
 # Seleção de variáveis
 opcoes = st.sidebar.multiselect("Selecione métricas para exibir:", ["Kg Produzido", "Metragem"], default=["Kg Produzido","Metragem"])
@@ -50,8 +58,6 @@ if "Metragem" in opcoes:
     ax2.set_ylabel("Metragem", color="red")
     ax2.tick_params(axis="y", labelcolor="red")
 
-# Melhorar formatação do eixo X
 plt.xticks(rotation=45, ha="right")
-
 fig.tight_layout()
 st.pyplot(fig)
