@@ -12,27 +12,27 @@ df = pd.read_csv(url)
 # Corrigir nomes de colunas
 df.columns = df.columns.str.strip().str.replace("\n", " ", regex=True)
 
-# Converter coluna Data
-df["Data"] = pd.to_datetime(df["Data"], format="%d/%b", errors="coerce")
+# --- Converter coluna Data ---
+df["Data"] = pd.to_datetime(df["Data"], errors="coerce", dayfirst=True)
+
+# Adicionar ano fixo caso venha sem ano
 df["Data"] = df["Data"].apply(lambda x: x.replace(year=2025) if pd.notnull(x) else x)
 
-# Traduzir meses manualmente
+# Tradução manual de meses
 meses_pt = {
-    "Jan": "Janeiro", "Feb": "Fevereiro", "Mar": "Março",
-    "Apr": "Abril", "May": "Maio", "Jun": "Junho",
-    "Jul": "Julho", "Aug": "Agosto", "Sep": "Setembro",
-    "Oct": "Outubro", "Nov": "Novembro", "Dec": "Dezembro"
+    1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
+    5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
+    9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
 }
 
-# Criar coluna Mes_Ano -> garante string
-df["Mes_Ano"] = df["Data"].dt.strftime("%b/%Y")
-df["Mes_Ano"] = df["Mes_Ano"].astype(str).str.split("/").str[0].map(meses_pt) + "/" + df["Data"].dt.year.astype(str)
+# Criar coluna Mes_Ano em PT-BR
+df["Mes_Ano"] = df["Data"].dt.month.map(meses_pt) + "/" + df["Data"].dt.year.astype(str)
 
-# --- Filtro lateral ---
+# --- Barra lateral ---
 st.sidebar.header("🔍 Filtros")
-mes_filtro = st.sidebar.selectbox("Selecione o mês", df["Mes_Ano"].dropna().unique())
+mes_filtro = st.sidebar.selectbox("Selecione o mês", sorted(df["Mes_Ano"].dropna().unique()))
 
-# Filtrar
+# Filtrar dados
 df_filtrado = df[df["Mes_Ano"] == mes_filtro]
 df_daily = df_filtrado.groupby("Data")[["Kg Produzido", "Metragem"]].sum().reset_index()
 
@@ -49,11 +49,11 @@ st.subheader(f"📈 Produção Diária ({mes_filtro})")
 fig, ax1 = plt.subplots(figsize=(12,6))
 
 # Barras - Kg Produzido
-barras = ax1.bar(df_daily["Data"], df_daily["Kg Produzido"], color="skyblue", label="Kg Produzido")
-ax1.set_ylabel("Kg Produzido (kg)", color="blue")
-ax1.tick_params(axis="y", labelcolor="blue")
+barras = ax1.bar(df_daily["Data"], df_daily["Kg Produzido"], color="seagreen", label="Kg Produzido")
+ax1.set_ylabel("Kg Produzido (kg)", color="seagreen")
+ax1.tick_params(axis="y", labelcolor="seagreen")
 
-# Rótulos formatados com pontos
+# Rótulos das barras formatados com pontos (5.000 etc.)
 for b in barras:
     valor = b.get_height()
     ax1.text(b.get_x() + b.get_width()/2, valor + 200, f"{valor:,.0f}".replace(",", "."),
@@ -61,13 +61,13 @@ for b in barras:
 
 # Linha - Metragem em milheiros
 ax2 = ax1.twinx()
-ax2.plot(df_daily["Data"], df_daily["Metragem_milheiros"], color="red", marker="o", linewidth=2, label="Metragem (milheiros)")
-ax2.set_ylabel("Metragem (milheiros)", color="red")
-ax2.tick_params(axis="y", labelcolor="red")
+ax2.plot(df_daily["Data"], df_daily["Metragem_milheiros"], color="darkorange", marker="o", linewidth=2, label="Metragem (milheiros)")
+ax2.set_ylabel("Metragem (milheiros)", color="darkorange")
+ax2.tick_params(axis="y", labelcolor="darkorange")
 
 # Rótulos da linha
 for x, y in zip(df_daily["Data"], df_daily["Metragem_milheiros"]):
-    ax2.text(x, y + 0.3, f"{y:,.1f}".replace(",", "."), ha="center", fontsize=8, color="red")
+    ax2.text(x, y + 0.3, f"{y:,.1f}".replace(",", "."), ha="center", fontsize=8, color="darkorange")
 
 plt.xticks(rotation=45)
 fig.tight_layout()
